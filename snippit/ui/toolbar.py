@@ -6,7 +6,7 @@ import logging
 from typing import Optional
 from PIL import Image
 from PySide6.QtCore import QPoint, QRect, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QFont, QIcon, QKeySequence, QShortcut
+from PySide6.QtGui import QColor, QFont, QGuiApplication, QIcon, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
@@ -87,7 +87,7 @@ QPushButton#btnClose:hover {
 
 class FloatingToolbar(QWidget):
     """
-    Floating action toolbar that appears near a newly cropped screenshot.
+    Floating action toolbar that appears consistently at the top of the screen.
     """
     remove_bg_requested = Signal()
     save_requested = Signal()
@@ -114,7 +114,7 @@ class FloatingToolbar(QWidget):
 
         self._init_ui()
         self._init_timer()
-        self._position_near_anchor()
+        self._position_at_top()
 
         # Keyboard shortcuts
         QShortcut(QKeySequence(Qt.Key.Key_Escape), self, self.close)
@@ -145,14 +145,14 @@ class FloatingToolbar(QWidget):
         frame_layout.addWidget(self._status_label)
 
         # Remove BG button
-        self._btn_remove_bg = QPushButton("✨ Remove BG", self._frame)
+        self._btn_remove_bg = QPushButton("Remove BG", self._frame)
         self._btn_remove_bg.setObjectName("btnRemoveBg")
         self._btn_remove_bg.setToolTip("Remove background using offline AI (Phase 2)")
         self._btn_remove_bg.clicked.connect(self._on_remove_bg_clicked)
         frame_layout.addWidget(self._btn_remove_bg)
 
         # Save button
-        self._btn_save = QPushButton("💾 Save", self._frame)
+        self._btn_save = QPushButton("Save", self._frame)
         self._btn_save.setObjectName("btnSave")
         self._btn_save.setToolTip("Save snippet to file (Ctrl+S)")
         self._btn_save.clicked.connect(self._on_save_clicked)
@@ -188,33 +188,28 @@ class FloatingToolbar(QWidget):
             self._timer.start(int(self._timeout_seconds * 1000))
         super().leaveEvent(event)
 
-    def _position_near_anchor(self):
-        """Calculates optimal position on screen near the captured bounding box."""
+    def _position_at_top(self):
+        """Positions the toolbar consistently at the top-center of the screen (Windows Snipping Tool style)."""
         self.adjustSize()
         tb_w = self.sizeHint().width()
         tb_h = self.sizeHint().height()
 
-        # Try placing centered below the anchor rectangle
-        x = self._anchor_rect.center().x() - (tb_w // 2)
-        y = self._anchor_rect.bottom() + 12
+        app = QGuiApplication.instance()
+        screen = None
+        if app and hasattr(app, "screenAt"):
+            screen = app.screenAt(self._anchor_rect.center())
 
-        # Get screen geometry containing anchor
-        screen = self.screen()
+        if not screen:
+            screen = self.screen() or (app.primaryScreen() if app else None)
+
         if screen:
             screen_geo = screen.geometry()
         else:
             screen_geo = QRect(0, 0, 1920, 1080)
 
-        # Keep inside screen horizontal bounds
-        x = max(screen_geo.left() + 10, min(screen_geo.right() - tb_w - 10, x))
-
-        # If too low, place above the selection
-        if y + tb_h > screen_geo.bottom() - 10:
-            y = self._anchor_rect.top() - tb_h - 12
-
-        # If still offscreen, place inside selection or at screen bottom
-        if y < screen_geo.top() + 10:
-            y = screen_geo.bottom() - tb_h - 20
+        # Center horizontally at the top of the monitor
+        x = screen_geo.left() + (screen_geo.width() - tb_w) // 2
+        y = screen_geo.top() + 16
 
         self.move(x, y)
 
