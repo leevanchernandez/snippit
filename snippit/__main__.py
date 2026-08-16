@@ -9,6 +9,7 @@ from PySide6.QtWidgets import QApplication
 
 from snippit.app import SnippitApp
 from snippit.resources.icons import get_icon
+from snippit.ui.theme import get_font
 
 
 def setup_logging():
@@ -28,6 +29,9 @@ def main():
     app.setOrganizationName("Snippit")
     app.setApplicationDisplayName("Snippit")
     app.setWindowIcon(get_icon("idle"))
+
+    # Set standardized Windows typography
+    app.setFont(get_font(size_pt=9))
 
     # Critical for tray applications: don't exit when overlay or toolbar closes
     app.setQuitOnLastWindowClosed(False)

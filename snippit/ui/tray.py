@@ -8,7 +8,8 @@ from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import QMenu, QSystemTrayIcon
 
-from snippit.resources.icons import get_icon
+from snippit.resources.icons import get_action_icon, get_icon
+from snippit.ui.theme import get_color, get_tray_menu_stylesheet
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +17,7 @@ logger = logging.getLogger(__name__)
 class SystemTray(QObject):
     """
     Manages the system tray icon, context menu, and desktop notifications.
+    Follows a native, restrained Windows utility aesthetic.
     """
     capture_requested = Signal()
     settings_requested = Signal()
@@ -33,44 +35,25 @@ class SystemTray(QObject):
 
     def _init_menu(self):
         self._menu = QMenu()
-        self._menu.setStyleSheet("""
-            QMenu {
-                background-color: #252830;
-                color: #ffffff;
-                border: 1px solid rgba(255, 255, 255, 0.15);
-                border-radius: 8px;
-                padding: 6px;
-            }
-            QMenu::item {
-                padding: 6px 20px;
-                border-radius: 4px;
-            }
-            QMenu::item:selected {
-                background-color: #0078d7;
-            }
-            QMenu::separator {
-                height: 1px;
-                background-color: rgba(255, 255, 255, 0.1);
-                margin: 4px 8px;
-            }
-        """)
+        self._menu.setStyleSheet(get_tray_menu_stylesheet())
 
-        # Capture action
-        self._act_capture = QAction(f"📸 Capture Screen  ({self._hotkey_display})", self._menu)
+        # Capture action with vector icon
+        capture_text = f"Capture Screen\t{self._hotkey_display}"
+        self._act_capture = QAction(get_action_icon("capture", color=get_color("text_primary")), capture_text, self._menu)
         self._act_capture.triggered.connect(self.capture_requested.emit)
         self._menu.addAction(self._act_capture)
 
         self._menu.addSeparator()
 
-        # Settings action
-        self._act_settings = QAction("⚙️ Settings...", self._menu)
+        # Settings action with vector icon
+        self._act_settings = QAction(get_action_icon("settings", color=get_color("text_primary")), "Settings...", self._menu)
         self._act_settings.triggered.connect(self.settings_requested.emit)
         self._menu.addAction(self._act_settings)
 
         self._menu.addSeparator()
 
-        # Quit action
-        self._act_quit = QAction("❌ Quit Snippit", self._menu)
+        # Quit action with vector icon
+        self._act_quit = QAction(get_action_icon("quit", color=get_color("text_primary")), "Quit Snippit", self._menu)
         self._act_quit.triggered.connect(self.quit_requested.emit)
         self._menu.addAction(self._act_quit)
 

@@ -21,6 +21,7 @@ from PySide6.QtWidgets import QWidget
 
 from snippit.core.capture import CapturedScreen, crop_region
 from snippit.core.clipboard import pil_to_qimage
+from snippit.ui.theme import get_color, get_font
 
 logger = logging.getLogger(__name__)
 
@@ -141,7 +142,7 @@ class SelectionOverlay(QWidget):
             painter.drawPixmap(self.rect(), self._bg_pixmap)
 
         # 2. Draw mask over everything outside the selection
-        mask_color = QColor(0, 0, 0, 110)
+        mask_color = get_color("surface_overlay_dim")
         if self._selection_rect.isValid() and not self._selection_rect.isEmpty():
             # Cutout path using OddEvenFill
             path = QPainterPath()
@@ -150,8 +151,8 @@ class SelectionOverlay(QWidget):
             path.addRect(QRectF(self._selection_rect))
             painter.fillPath(path, mask_color)
 
-            # 3. Draw border around selection rectangle
-            border_pen = QPen(QColor(0, 150, 255, 255))
+            # 3. Draw border around selection rectangle (Crisp accent blue)
+            border_pen = QPen(get_color("accent"))
             border_pen.setWidth(2)
             painter.setPen(border_pen)
             painter.setBrush(Qt.BrushStyle.NoBrush)
@@ -163,8 +164,8 @@ class SelectionOverlay(QWidget):
             phys_w = int(round(w * self._geom.scale_x))
             phys_h = int(round(h * self._geom.scale_y))
             dim_text = f"{phys_w} × {phys_h} px"
-            
-            font = QFont("Segoe UI", 9, QFont.Weight.Bold)
+
+            font = get_font(size_pt=9, weight=QFont.Weight.DemiBold)
             painter.setFont(font)
             fm = painter.fontMetrics()
             text_w = fm.horizontalAdvance(dim_text) + 16
@@ -173,7 +174,7 @@ class SelectionOverlay(QWidget):
             # Position badge below selection, or above if close to bottom
             badge_x = self._selection_rect.x() + (self._selection_rect.width() - text_w) // 2
             badge_x = max(8, min(self.width() - text_w - 8, badge_x))
-            
+
             if self._selection_rect.bottom() + text_h + 12 < self.height():
                 badge_y = self._selection_rect.bottom() + 8
             elif self._selection_rect.top() - text_h - 8 > 0:
@@ -182,14 +183,16 @@ class SelectionOverlay(QWidget):
                 badge_y = self._selection_rect.y() + 8
 
             badge_rect = QRectF(badge_x, badge_y, text_w, text_h)
-            
-            # Badge background
-            painter.setPen(QPen(QColor(0, 150, 255, 180), 1))
-            painter.setBrush(QBrush(QColor(25, 25, 30, 220)))
+
+            # Badge background and subtle border
+            badge_bg = get_color("surface_solid")
+            badge_border = get_color("surface_border")
+            painter.setPen(QPen(badge_border, 1))
+            painter.setBrush(QBrush(badge_bg))
             painter.drawRoundedRect(badge_rect, 4, 4)
 
             # Badge text
-            painter.setPen(QColor(255, 255, 255))
+            painter.setPen(get_color("text_primary"))
             painter.drawText(badge_rect, Qt.AlignmentFlag.AlignCenter, dim_text)
         else:
             # Entire screen is dimmed when no selection is in progress

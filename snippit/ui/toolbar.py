@@ -18,76 +18,16 @@ from PySide6.QtWidgets import (
 )
 
 from snippit.core.clipboard import copy_image_to_clipboard
+from snippit.resources.icons import get_action_icon
+from snippit.ui.theme import get_color, get_toolbar_stylesheet
 
 logger = logging.getLogger(__name__)
-
-TOOLBAR_STYLE = """
-QFrame#toolbarFrame {
-    background-color: rgba(30, 32, 38, 235);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 10px;
-}
-
-QLabel#statusLabel {
-    color: #4cd964;
-    font-family: "Segoe UI", sans-serif;
-    font-size: 12px;
-    font-weight: 600;
-    padding-left: 8px;
-    padding-right: 4px;
-}
-
-QPushButton {
-    background-color: rgba(255, 255, 255, 0.08);
-    color: #f0f0f0;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 6px;
-    font-family: "Segoe UI", sans-serif;
-    font-size: 12px;
-    font-weight: 500;
-    padding: 6px 12px;
-    min-height: 18px;
-}
-
-QPushButton:hover {
-    background-color: rgba(255, 255, 255, 0.16);
-    border-color: rgba(255, 255, 255, 0.25);
-    color: #ffffff;
-}
-
-QPushButton:pressed {
-    background-color: rgba(255, 255, 255, 0.04);
-}
-
-QPushButton#btnRemoveBg {
-    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #6366f1, stop:1 #8b5cf6);
-    border: none;
-    color: #ffffff;
-    font-weight: 600;
-}
-
-QPushButton#btnRemoveBg:hover {
-    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #4f46e5, stop:1 #7c3aed);
-}
-
-QPushButton#btnClose {
-    background-color: transparent;
-    border: none;
-    color: #888888;
-    padding: 4px 8px;
-    font-size: 14px;
-}
-
-QPushButton#btnClose:hover {
-    background-color: rgba(255, 59, 48, 0.8);
-    color: #ffffff;
-}
-"""
 
 
 class FloatingToolbar(QWidget):
     """
     Floating action toolbar that appears consistently at the top of the screen.
+    Follows a native, restrained Windows utility aesthetic.
     """
     remove_bg_requested = Signal()
     save_requested = Signal()
@@ -126,39 +66,43 @@ class FloatingToolbar(QWidget):
         # Outer container frame
         self._frame = QFrame(self)
         self._frame.setObjectName("toolbarFrame")
-        self._frame.setStyleSheet(TOOLBAR_STYLE)
+        self._frame.setStyleSheet(get_toolbar_stylesheet())
 
-        # Drop shadow effect
+        # Drop shadow effect (restrained, professional depth)
         shadow = QGraphicsDropShadowEffect(self)
-        shadow.setBlurRadius(20)
-        shadow.setColor(QColor(0, 0, 0, 160))
-        shadow.setOffset(0, 4)
+        shadow.setBlurRadius(16)
+        shadow.setColor(QColor(0, 0, 0, 140))
+        shadow.setOffset(0, 3)
         self._frame.setGraphicsEffect(shadow)
 
         frame_layout = QHBoxLayout(self._frame)
         frame_layout.setContentsMargins(10, 6, 10, 6)
         frame_layout.setSpacing(8)
 
-        # Copied status badge
-        self._status_label = QLabel("✓ Copied", self._frame)
+        # Copied status badge (Checkmark glyph + Copied)
+        self._status_label = QLabel("\uE73E Copied", self._frame)
         self._status_label.setObjectName("statusLabel")
         frame_layout.addWidget(self._status_label)
 
-        # Remove BG button
+        # Primary Action: Remove BG (Solid Accent, No Gradient)
         self._btn_remove_bg = QPushButton("Remove BG", self._frame)
         self._btn_remove_bg.setObjectName("btnRemoveBg")
+        self._btn_remove_bg.setIcon(get_action_icon("remove_bg", color=get_color("text_on_accent")))
+        self._btn_remove_bg.setIconSize(QSize(14, 14))
         self._btn_remove_bg.setToolTip("Remove background using offline AI (Phase 2)")
         self._btn_remove_bg.clicked.connect(self._on_remove_bg_clicked)
         frame_layout.addWidget(self._btn_remove_bg)
 
-        # Save button
+        # Secondary Action: Save (Clean Neutral Control)
         self._btn_save = QPushButton("Save", self._frame)
         self._btn_save.setObjectName("btnSave")
+        self._btn_save.setIcon(get_action_icon("save", color=get_color("text_primary")))
+        self._btn_save.setIconSize(QSize(14, 14))
         self._btn_save.setToolTip("Save snippet to file (Ctrl+S)")
         self._btn_save.clicked.connect(self._on_save_clicked)
         frame_layout.addWidget(self._btn_save)
 
-        # Close button (✕)
+        # Ghost / Dismiss Action: Close
         self._btn_close = QPushButton("✕", self._frame)
         self._btn_close.setObjectName("btnClose")
         self._btn_close.setToolTip("Dismiss (Esc)")
@@ -192,7 +136,6 @@ class FloatingToolbar(QWidget):
         """Positions the toolbar consistently at the top-center of the screen (Windows Snipping Tool style)."""
         self.adjustSize()
         tb_w = self.sizeHint().width()
-        tb_h = self.sizeHint().height()
 
         app = QGuiApplication.instance()
         screen = None
@@ -231,10 +174,10 @@ class FloatingToolbar(QWidget):
         if file_path:
             try:
                 self._image.save(file_path)
-                self.show_status("💾 Saved!", duration_ms=2000)
+                self.show_status("\uE73E Saved", duration_ms=2000)
             except Exception as e:
                 logger.error(f"Failed to save image to {file_path}: {e}")
-                self.show_status("⚠️ Save failed", duration_ms=3000)
+                self.show_status("\uE7BA Save failed", duration_ms=3000)
 
     def show_status(self, text: str, duration_ms: int = 2000):
         """Updates status text badge temporarily."""
