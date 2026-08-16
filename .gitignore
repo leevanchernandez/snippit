@@ -56,3 +56,6 @@ models/
 # Packaging (PyInstaller / Nuitka)
 *.spec
 output/
+
+# Agent / Planning files (local only)
+PLANNING.md
