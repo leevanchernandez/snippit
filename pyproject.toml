@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "snippit"
+version = "0.1.0"
+description = "A lightweight cross-platform snipping tool with built-in offline AI background removal"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    { name = "Snippit Team" }
+]
+dependencies = [
+    "PySide6>=6.7.0",
+    "mss>=9.0.0",
+    "pynput>=1.7.6",
+    "Pillow>=10.0.0",
+]
+
+[project.optional-dependencies]
+ai = [
+    "rembg>=2.0.50",
+]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-qt>=4.4.0",
+]
+
+[project.scripts]
+snippit = "snippit.__main__:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
