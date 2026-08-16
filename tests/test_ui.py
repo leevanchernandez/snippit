@@ -1,4 +1,4 @@
-"""Unit tests for UI components (Theme, Toolbar, Overlay, Tray, Icons)."""
+"""Unit tests for UI components (Theme, Toolbar, Overlay, Tray, Icons, Spinner)."""
 
 import pytest
 from PIL import Image
@@ -9,6 +9,7 @@ from PySide6.QtWidgets import QApplication
 from snippit.core.capture import CapturedScreen, ScreenGeometry
 from snippit.resources.icons import create_action_icon_pixmap, create_app_icon, get_action_icon, get_icon
 from snippit.ui.overlay import SelectionOverlay
+from snippit.ui.spinner import SpinnerWidget
 from snippit.ui.theme import TOKENS, get_color, get_font, get_toolbar_stylesheet, get_tray_menu_stylesheet
 from snippit.ui.toolbar import FloatingToolbar
 from snippit.ui.tray import SystemTray
@@ -51,12 +52,31 @@ def test_icons_generation(qapp):
         assert not action_icon.isNull()
 
 
-def test_floating_toolbar_lifecycle(qapp):
+def test_spinner_widget(qapp):
+    spinner = SpinnerWidget(size=16)
+    assert spinner.width() == 16
+    assert spinner.height() == 16
+    assert not spinner._is_active
+
+    spinner.start()
+    assert spinner._is_active
+    assert spinner._timer.isActive()
+
+    spinner._on_tick()
+    assert spinner._angle > 0.0
+
+    spinner.stop()
+    assert not spinner._is_active
+    assert not spinner._timer.isActive()
+
+
+def test_floating_toolbar_lifecycle_and_states(qapp):
     img = Image.new("RGB", (100, 100), color=(255, 0, 0))
     anchor = QRect(100, 100, 200, 200)
 
     toolbar = FloatingToolbar(image=img, anchor_rect=anchor, timeout_seconds=0)
     assert toolbar is not None
+    assert toolbar.image == img
     assert "Copied" in toolbar._status_label.text()
 
     # Test signals
@@ -64,6 +84,31 @@ def test_floating_toolbar_lifecycle(qapp):
     toolbar.remove_bg_requested.connect(lambda: remove_bg_called.append(True))
     toolbar._on_remove_bg_clicked()
     assert len(remove_bg_called) == 1
+
+    # Test loading state
+    toolbar.set_loading(True, "Removing background...")
+    assert toolbar._is_loading
+    assert not toolbar._btn_remove_bg.isEnabled()
+    assert not toolbar._btn_save.isEnabled()
+    assert toolbar._spinner._is_active
+    assert "Removing background..." in toolbar._status_label.text()
+
+    # Test processed image state
+    transparent_img = Image.new("RGBA", (100, 100), color=(255, 0, 0, 0))
+    toolbar.set_processed_image(transparent_img)
+    assert not toolbar._is_loading
+    assert not toolbar._spinner._is_active
+    assert toolbar.image == transparent_img
+    assert "Removed" in toolbar._btn_remove_bg.text()
+    assert not toolbar._btn_remove_bg.isEnabled()
+    assert toolbar._btn_save.isEnabled()
+    assert "Copied" in toolbar._status_label.text()
+
+    # Test error state
+    toolbar.set_error("Test failure")
+    assert not toolbar._is_loading
+    assert toolbar._btn_remove_bg.isEnabled()
+    assert "Test failure" in toolbar._status_label.text()
 
     toolbar.close()
 

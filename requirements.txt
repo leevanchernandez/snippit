@@ -2,4 +2,7 @@ PySide6>=6.7.0
 mss>=9.0.0
 pynput>=1.7.6
 Pillow>=10.0.0
+rembg>=2.0.50
+onnxruntime>=1.18.0
 pytest>=8.0.0
+

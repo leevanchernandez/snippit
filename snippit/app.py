@@ -12,6 +12,7 @@ from PySide6.QtWidgets import QApplication
 from snippit.core.capture import capture_virtual_screen
 from snippit.core.clipboard import copy_image_to_clipboard
 from snippit.core.hotkey import HotkeyListener
+from snippit.processing.background_removal import BackgroundRemovalWorker
 from snippit.resources.icons import get_icon
 from snippit.settings import Settings
 from snippit.ui.overlay import SelectionOverlay
@@ -24,7 +25,7 @@ logger = logging.getLogger(__name__)
 class SnippitApp(QObject):
     """
     Main application coordinator wiring together hotkey events, screen capture,
-    selection overlay, clipboard copy, and post-capture toolbar.
+    selection overlay, clipboard copy, post-capture toolbar, and AI processing.
     """
 
     def __init__(self, settings: Optional[Settings] = None, parent: Optional[QObject] = None):
@@ -33,6 +34,7 @@ class SnippitApp(QObject):
 
         self._overlay: Optional[SelectionOverlay] = None
         self._toolbar: Optional[FloatingToolbar] = None
+        self._bg_worker: Optional[BackgroundRemovalWorker] = None
         self._is_capturing = False
 
         # Initialize System Tray
@@ -106,6 +108,7 @@ class SnippitApp(QObject):
                 anchor_rect=global_rect,
                 timeout_seconds=self.settings.toolbar_timeout_seconds,
             )
+            self._toolbar.remove_bg_requested.connect(self._on_remove_bg_requested)
             self._toolbar.dismissed.connect(self._on_toolbar_dismissed)
             self._toolbar.show()
             self._toolbar.raise_()
@@ -113,6 +116,62 @@ class SnippitApp(QObject):
 
         except Exception as e:
             logger.error(f"Error processing captured region: {e}", exc_info=True)
+
+    def _on_remove_bg_requested(self):
+        """Triggers offline AI background removal in a background thread."""
+        if self._bg_worker is not None and self._bg_worker.isRunning():
+            logger.debug("Background removal worker already running")
+            return
+
+        if self._toolbar is None:
+            return
+
+        image_to_process = self._toolbar.image
+        self._tray.set_icon_state("processing")
+        self._toolbar.set_loading(True, "Initializing AI...")
+
+        self._bg_worker = BackgroundRemovalWorker(
+            image=image_to_process,
+            model_name=self.settings.ai_model,
+            parent=self,
+        )
+        self._bg_worker.status_changed.connect(self._on_bg_status_changed)
+        self._bg_worker.finished.connect(self._on_bg_removed)
+        self._bg_worker.error.connect(self._on_bg_remove_error)
+        self._bg_worker.start()
+
+    def _on_bg_status_changed(self, status_text: str):
+        """Updates toolbar loading status during inference."""
+        if self._toolbar is not None:
+            self._toolbar.set_loading(True, status_text)
+
+    def _on_bg_removed(self, transparent_image: Image.Image):
+        """Handles successful background removal."""
+        self._tray.set_icon_state("idle")
+        self._bg_worker = None
+
+        try:
+            # Copy transparent PNG to clipboard
+            copy_image_to_clipboard(transparent_image)
+            logger.info("Background removed and transparent PNG copied to clipboard")
+
+            # Update floating toolbar
+            if self._toolbar is not None:
+                self._toolbar.set_processed_image(transparent_image)
+
+        except Exception as e:
+            logger.error(f"Error handling background removed image: {e}", exc_info=True)
+            if self._toolbar is not None:
+                self._toolbar.set_error("Clipboard copy failed")
+
+    def _on_bg_remove_error(self, error_msg: str):
+        """Handles background removal failure."""
+        self._tray.set_icon_state("idle")
+        self._bg_worker = None
+        logger.error(f"Background removal failed: {error_msg}")
+
+        if self._toolbar is not None:
+            self._toolbar.set_error("Background removal failed")
 
     def _on_toolbar_dismissed(self):
         """Reset toolbar reference when dismissed."""
@@ -129,18 +188,26 @@ class SnippitApp(QObject):
         """Gracefully shuts down Snippit."""
         logger.info("Shutting down Snippit...")
         self._hotkey_listener.stop()
+
+        if self._bg_worker is not None and self._bg_worker.isRunning():
+            self._bg_worker.cancel()
+            self._bg_worker.wait(1000)
+            self._bg_worker = None
+
         if self._overlay is not None:
             try:
                 self._overlay.close()
             except Exception:
                 pass
             self._overlay = None
+
         if self._toolbar is not None:
             try:
                 self._toolbar.close()
             except Exception:
                 pass
             self._toolbar = None
+
         self._tray.hide()
 
         app = QApplication.instance()

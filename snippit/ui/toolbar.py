@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 
 from snippit.core.clipboard import copy_image_to_clipboard
 from snippit.resources.icons import get_action_icon
+from snippit.ui.spinner import SpinnerWidget
 from snippit.ui.theme import get_color, get_toolbar_stylesheet
 
 logger = logging.getLogger(__name__)
@@ -44,6 +45,7 @@ class FloatingToolbar(QWidget):
         self._image = image
         self._anchor_rect = anchor_rect
         self._timeout_seconds = timeout_seconds
+        self._is_loading = False
 
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
@@ -58,6 +60,12 @@ class FloatingToolbar(QWidget):
 
         # Keyboard shortcuts
         QShortcut(QKeySequence(Qt.Key.Key_Escape), self, self.close)
+        QShortcut(QKeySequence(Qt.Key.Key_S | Qt.Modifier.CTRL), self, self._on_save_clicked)
+
+    @property
+    def image(self) -> Image.Image:
+        """Returns the current snippet image (raw or background-removed)."""
+        return self._image
 
     def _init_ui(self):
         main_layout = QHBoxLayout(self)
@@ -79,7 +87,12 @@ class FloatingToolbar(QWidget):
         frame_layout.setContentsMargins(10, 6, 10, 6)
         frame_layout.setSpacing(8)
 
-        # Copied status badge (Checkmark glyph + Copied)
+        # Vector animated spinner for background removal processing
+        self._spinner = SpinnerWidget(size=14, color=get_color("accent"), parent=self._frame)
+        self._spinner.hide()
+        frame_layout.addWidget(self._spinner)
+
+        # Copied / Operation status badge
         self._status_label = QLabel("\uE73E Copied", self._frame)
         self._status_label.setObjectName("statusLabel")
         frame_layout.addWidget(self._status_label)
@@ -89,7 +102,7 @@ class FloatingToolbar(QWidget):
         self._btn_remove_bg.setObjectName("btnRemoveBg")
         self._btn_remove_bg.setIcon(get_action_icon("remove_bg", color=get_color("text_on_accent")))
         self._btn_remove_bg.setIconSize(QSize(14, 14))
-        self._btn_remove_bg.setToolTip("Remove background using offline AI (Phase 2)")
+        self._btn_remove_bg.setToolTip("Remove background using offline AI")
         self._btn_remove_bg.clicked.connect(self._on_remove_bg_clicked)
         frame_layout.addWidget(self._btn_remove_bg)
 
@@ -127,13 +140,13 @@ class FloatingToolbar(QWidget):
         super().enterEvent(event)
 
     def leaveEvent(self, event):
-        """Resume auto-dismiss timer when mouse leaves."""
-        if self._timer:
+        """Resume auto-dismiss timer when mouse leaves (if not actively loading)."""
+        if self._timer and not self._is_loading:
             self._timer.start(int(self._timeout_seconds * 1000))
         super().leaveEvent(event)
 
     def _position_at_top(self):
-        """Positions the toolbar consistently at the top-center of the screen (Windows Snipping Tool style)."""
+        """Positions the toolbar consistently at the top-center of the screen."""
         self.adjustSize()
         tb_w = self.sizeHint().width()
 
@@ -174,17 +187,72 @@ class FloatingToolbar(QWidget):
         if file_path:
             try:
                 self._image.save(file_path)
-                self.show_status("\uE73E Saved", duration_ms=2000)
+                self.show_status("\uE73E Saved", duration_ms=2500)
             except Exception as e:
                 logger.error(f"Failed to save image to {file_path}: {e}")
                 self.show_status("\uE7BA Save failed", duration_ms=3000)
 
+    def set_loading(self, is_loading: bool, status_text: str = "") -> None:
+        """
+        Toggles loading/processing state with spinner feedback and button locking.
+        """
+        self._is_loading = is_loading
+
+        if is_loading:
+            # Stop dismiss timer during inference
+            if self._timer and self._timer.isActive():
+                self._timer.stop()
+
+            self._btn_remove_bg.setEnabled(False)
+            self._btn_save.setEnabled(False)
+            self._spinner.start()
+            self._status_label.setText(status_text or "Removing background...")
+            self._status_label.setStyleSheet("color: #9B9B9B;")
+        else:
+            self._spinner.stop()
+            self._status_label.setStyleSheet("")
+
+        self.adjustSize()
+        self._position_at_top()
+
+    def set_processed_image(self, image: Image.Image) -> None:
+        """
+        Called when background removal completes successfully.
+        Updates internal image reference, button state, and status.
+        """
+        self._image = image
+        self.set_loading(False)
+
+        # Update button to indicate completion
+        self._btn_remove_bg.setText("Removed")
+        self._btn_remove_bg.setIcon(get_action_icon("check", color=get_color("text_on_accent")))
+        self._btn_remove_bg.setEnabled(False)
+        self._btn_save.setEnabled(True)
+
+        self.show_status("\uE73E Copied!", duration_ms=4500)
+
+    def set_error(self, message: str = "Background removal failed") -> None:
+        """Displays error status and re-enables action buttons."""
+        self.set_loading(False)
+        self._btn_remove_bg.setEnabled(True)
+        self._btn_save.setEnabled(True)
+
+        display_msg = message if len(message) <= 30 else "Operation failed"
+        self._status_label.setStyleSheet("color: #FF3B30;")
+        self.show_status(f"\uE7BA {display_msg}", duration_ms=3500)
+
     def show_status(self, text: str, duration_ms: int = 2000):
-        """Updates status text badge temporarily."""
+        """Updates status text badge and restarts auto-dismiss timer."""
         self._status_label.setText(text)
+        self.adjustSize()
+        self._position_at_top()
+
         if duration_ms > 0 and self._timer:
             self._timer.start(duration_ms)
 
     def closeEvent(self, event):
+        if self._timer and self._timer.isActive():
+            self._timer.stop()
+        self._spinner.stop()
         self.dismissed.emit()
         super().closeEvent(event)
