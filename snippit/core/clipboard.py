@@ -82,10 +82,18 @@ def copy_image_to_clipboard(image: Union[Image.Image, QImage]) -> bool:
         raise TypeError(f"Expected PIL.Image or QImage, got {type(image)}")
 
     mime_data = QMimeData()
-    # Format 1: Standard QImage bitmap
+    # Format 1: Standard QImage bitmap (CF_DIB / CF_BITMAP for legacy bitmap apps like Paint)
     mime_data.setImageData(qimage)
-    # Format 2: PNG data with preserved alpha channel
-    mime_data.setData("image/png", QByteArray(png_bytes))
+
+    # Format 2: Raw PNG bytes under registered formats
+    # 'PNG' is required by Windows Chromium, Electron (Canva), and MS Office
+    # 'image/png' is the standard MIME type used by browsers, GTK/Qt, and web APIs
+    # 'image/x-png' is the legacy MIME type for older toolchains
+    png_byte_array = QByteArray(png_bytes)
+    mime_data.setData("PNG", png_byte_array)
+    mime_data.setData("image/png", png_byte_array)
+    mime_data.setData("image/x-png", png_byte_array)
 
     clipboard.setMimeData(mime_data)
     return True
+

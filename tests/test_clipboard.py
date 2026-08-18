@@ -46,3 +46,22 @@ def test_image_to_png_bytes(qapp):
 
     # Standard PNG magic signature: \x89PNG\r\n\x1a\n
     assert png_bytes.startswith(b"\x89PNG\r\n\x1a\n")
+
+
+def test_copy_image_to_clipboard(qapp):
+    from snippit.core.clipboard import copy_image_to_clipboard
+    pil_img = Image.new("RGBA", (32, 32), color=(0, 255, 128, 100))
+    success = copy_image_to_clipboard(pil_img)
+    assert success is True
+
+    clipboard = QGuiApplication.clipboard()
+    mime = clipboard.mimeData()
+    assert mime is not None
+    formats = mime.formats()
+
+    # Ensure all crucial formats for Canva, Chromium, Office, and cross-platform apps exist
+    assert "PNG" in formats
+    assert "image/png" in formats
+    assert "image/x-png" in formats
+    assert mime.hasImage() is True
+
