@@ -1,6 +1,9 @@
+
 # Snippit ✂️
 
 A lightweight, cross-platform snipping tool with built-in offline AI background removal.
+
+<img width="1280" height="720" alt="snippit" src="https://github.com/user-attachments/assets/17b96e32-222a-4709-9acf-7f4ce825be87" />
 
 ---
 
